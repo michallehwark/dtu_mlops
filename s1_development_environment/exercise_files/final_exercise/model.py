@@ -1,22 +1,25 @@
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 
 
 class MyAwesomeModel(nn.Module):
-    def __init__(self):
+    def __init__(self, input_size, output_size):
         super().__init__()
 
-        self.fc1 = nn.Linear(784, 128)
-        self.fc2 = nn.Linear(128, 64)
-        #output
-        self.fc3 = nn.Linear(64, 10)
+        self.fc1 = nn.Linear(input_size, 256)
+        self.fc2 = nn.Linear(256, 128)
+        self.fc3 = nn.Linear(128, 64)
+
+        self.output = nn.Linear(64, output_size)
+
+        self.relu = nn.ReLU()
 
     def forward(self, x):
-        # Pass the input tensor through each of our operations
-        x = self.fc1(x)
-        x = F.relu(x)
-        x = self.fc2(x)
-        x = F.relu(x)
-        x = nn.LogSoftmax(dim=1)
-        
+
+        x = self.relu(self.fc1(x))
+        x = self.relu(self.fc2(x))
+        x = self.relu(self.fc3(x))
+
+        x = F.log_softmax(self.output(x), dim=1)
         return x
+
