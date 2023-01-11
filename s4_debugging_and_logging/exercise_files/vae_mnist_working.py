@@ -6,12 +6,26 @@ A simple implementation of Gaussian MLP Encoder and Decoder trained on MNIST
 """
 import torch
 import torch.nn as nn
+import matplotlib as plt
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from torchvision.datasets import MNIST
 from torchvision.utils import save_image
+from torch.profiler import profile, ProfilerActivity, tensorboard_trace_handler
+import wandb
+
+wandb.init(project="test-project", entity="mlops02476", config ={"lr": 0.001, "epochs": 5, "batch size": 100, "x_dim": 784, "hidden_dim": 400, "latent_dim": 20})
 
 # Model Hyperparameters
+wandb.config = {
+    "learning rate": 0.001,
+    "epochs": 5,
+    "batch size": 100,
+    "x_dim": 784,
+    "hidden_dim": 400,
+    "latent_dim": 20
+}
+
 dataset_path = 'datasets'
 cuda = torch.cuda.is_available()
 DEVICE = torch.device("cuda" if cuda else "cpu")
@@ -21,7 +35,6 @@ hidden_dim = 400
 latent_dim = 20
 lr = 1e-3
 epochs = 5
-
 
 # Data loading
 mnist_transform = transforms.Compose([transforms.ToTensor()])
@@ -101,24 +114,29 @@ optimizer = Adam(model.parameters(), lr=lr)
 
 
 print("Start training VAE...")
-model.train()
-for epoch in range(epochs):
-    overall_loss = 0
-    for batch_idx, (x, _) in enumerate(train_loader):
-        x = x.view(batch_size, x_dim)
-        x = x.to(DEVICE)
+   
+with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=True, on_trace_ready=tensorboard_trace_handler("./log/resnet18")) as prof:
+    model.train()
+    wandb.watch(model, log_freq=100)
+    for epoch in range(epochs):
+        overall_loss = 0
+        for batch_idx, (x, _) in enumerate(train_loader):
+            x = x.view(batch_size, x_dim)
+            x = x.to(DEVICE)
 
-        optimizer.zero_grad()
+            optimizer.zero_grad()
 
-        x_hat, mean, log_var = model(x)
-        loss = loss_function(x, x_hat, mean, log_var)
-        
-        overall_loss += loss.item()
-        
-        loss.backward()
-        optimizer.step()
-    print("\tEpoch", epoch + 1, "complete!", "\tAverage Loss: ", overall_loss / (batch_idx*batch_size))    
-print("Finish!!")
+            x_hat, mean, log_var = model(x)
+            loss = loss_function(x, x_hat, mean, log_var)
+            wandb.log({"Loss": loss})
+            overall_loss += loss.item()
+            
+            loss.backward()
+            optimizer.step()
+        print("\tEpoch", epoch + 1, "complete!", "\tAverage Loss: ", overall_loss / (batch_idx*batch_size))    
+        prof.step()
+print("Finished training !!")
+print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
 
 # Generate reconstructions
 model.eval()
